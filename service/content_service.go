@@ -2,99 +2,60 @@ package service
 
 import (
 	"context"
-	"errors"
 	"time"
 
+	stdErr "errors"
+
+	"dev.azure.com/daimler-mic/content-aggregator/service/errors"
 	"dev.azure.com/daimler-mic/content-aggregator/service/models"
 	"go.uber.org/zap"
 )
 
-// ContentService aggregates provider content & applies features.
 type ContentService struct {
-	factory  *ProviderFactory
-	logger   *zap.Logger
-	timeout  time.Duration
-	cacheTTL time.Duration
+	factory *ProviderFactory
+	logger  *zap.Logger
 }
 
-func (s *ContentService) HandleRequest(ctx context.Context, req models.AggregateRequest) (map[string]interface{}, error) {
-
-	if len(req.Providers) == 0 {
-		return nil, errors.New("no providers supplied")
+func NewContentService(factory *ProviderFactory, logger *zap.Logger, timeout time.Duration) *ContentService {
+	return &ContentService{
+		factory: factory,
+		logger:  logger.With(zap.String("component", "content-service")),
 	}
+}
 
-	s.logger.Info("content aggregation started",
-		zap.Int("providers", len(req.Providers)),
-	)
+func (s *ContentService) Aggregate(ctx context.Context,req *models.AggregateRequest) (*models.AggregateResponse) {
 
-	response := make(map[string]interface{})
+	result := &models.AggregateResponse{Providers: make(map[string]*models.ProviderResponse)}
 
 	for _, p := range req.Providers {
+
 		provider := s.factory.GetProvider(p.Provider)
+
+		  pResp := &models.ProviderResponse{
+            Data:          make(map[string][]*models.ContentItem),
+            FeatureErrors: make(map[string]errors.AppError),
+        }
 		if provider == nil {
-			response[p.Provider] = map[string]string{
-				"error": "unsupported provider",
-			}
+			s.logger.Warn("unsupported provider", zap.String("provider", p.Provider))
+
+            pResp.FeatureErrors["_provider"] = errors.BadGateway(stdErr.New("Provider not supported"))
+						result.Providers[p.Provider] = pResp
+
 			continue
 		}
-
-		// Timeout per provider call
-		pctx, cancel := context.WithTimeout(ctx, s.timeout)
-		defer cancel()
-
-		rawData, err := provider.FetchContent(pctx, p)
-		if err != nil {
-			s.logger.Error("provider fetch failed", zap.String("provider", p.Provider), zap.Error(err))
-			response[p.Provider] = map[string]string{
-				"error": err.Error(),
-			}
-			continue
-		}
-
-		// rawData is map[string][]ContentItem
-		featureOutput := make(map[string][]models.ContentItem)
 
 		for _, featureName := range p.Functionality {
 
-			feature, ok := FeatureRegistry[featureName]
-			if !ok {
-				featureOutput[featureName] = []models.ContentItem{
-					//{ID: "error", Raw: map[string]interface{}{"error": "unsupported feature"}},
-				}
+			items, err := provider.FetchFeature(ctx, &p, featureName)
+			if err != nil {
+				s.logger.Error("feature fetch failed",zap.String("provider", p.Provider),zap.String("feature", featureName),zap.Error(err),)
+				pResp.FeatureErrors[featureName] = err
 				continue
 			}
-
-			// If provider didn't provide that feature key, skip or err
-			items, ok := rawData[featureName]
-			if !ok {
-				featureOutput[featureName] = []models.ContentItem{
-					//{ID: "error", Raw: map[string]interface{}{"error": "provider did not return feature"}},
-				}
-				continue
-			}
-
-			// Apply feature transformation
-			out := feature.Execute(ctx, items, p)
-			featureOutput[featureName] = out
+			pResp.Data[featureName] = items
 		}
-
-		response[p.Provider] = featureOutput
+		result.Providers[p.Provider] = pResp
 	}
 
-	return response, nil
-}
-
-func NewContentService(
-	factory *ProviderFactory,
-	logger *zap.Logger,
-	timeout time.Duration,
-	cacheTTL time.Duration,
-) *ContentService {
-
-	return &ContentService{
-		factory:  factory,
-		logger:   logger,
-		timeout:  timeout,
-		cacheTTL: cacheTTL,
-	}
+	return result
 }

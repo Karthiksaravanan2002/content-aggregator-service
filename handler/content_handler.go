@@ -3,10 +3,12 @@ package handler
 import (
 	"context"
 	"encoding/json"
+
 	"net/http"
 	"time"
 
 	"dev.azure.com/daimler-mic/content-aggregator/service"
+	"dev.azure.com/daimler-mic/content-aggregator/service/helper"
 	"dev.azure.com/daimler-mic/content-aggregator/service/models"
 	"dev.azure.com/daimler-mic/content-aggregator/service/props"
 	"go.uber.org/zap"
@@ -45,7 +47,7 @@ func (h *ContentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse request JSON
-	var aggReq models.AggregateRequest
+	var aggReq *models.AggregateRequest
 	if err := json.NewDecoder(r.Body).Decode(&aggReq); err != nil {
 		h.logger.Warn("invalid JSON", zap.Error(err))
 		http.Error(w, "invalid request body", http.StatusBadRequest)
@@ -63,22 +65,10 @@ func (h *ContentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	// Execute content aggregation
-	resp, err := h.contentService.HandleRequest(ctx, aggReq)
-	if err != nil {
-		h.logger.Error("service error",
-			zap.String("path", r.URL.Path),
-			zap.Error(err),
-		)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-		return
-	}
+	resp:= h.contentService.Aggregate(ctx, aggReq)
 
 	// Successful response
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(helper.SelectRespStatusCode(resp))
 	_ = json.NewEncoder(w).Encode(resp)
-
-	h.logger.Info("content aggregation completed successfully",
-		zap.Int("providerCount", len(aggReq.Providers)),
-	)
 }

@@ -1,20 +1,23 @@
-Server:
-  Address: ":8080"
-  ContextRoot: "/"
-  Timeout: 30   # context timeout in seconds
+server:
+  address: ":8080"
+  contextRoot: "/"
+  timeout: 3000   # context timeout in seconds
 
-Logging:
-  Level: "info"
-  Format: "json"
-  BodyLogging: "errors"
+cache:
+  address: ":8080"
+  contextRoot: "/"
+  timeout: 1000
+  ttlSeconds: 1000
 
-youtube:
-  apiKey: "AIzaSyCAJzTJgPJzXYKCum6DOiBzzmfsNXsPIyg"
+logging:
+  level: "info"
+  format: "json"
+  bodyLogging: "all"
 
-redis:
-  host: "localhost:6379"
-  password: ""
-  db: 0
-
-Cache:
-  TTLSeconds: 300
+providers:
+  youtube:
+    apiKey: "AIzaSyCAJzTJgPJzXYKCum6DOiBzzmfsNXsPIyg"
+  twitch:
+    clientID: "TWITCH_CLIENT_ID"
+    clientSecret: "TWITCH_CLIENT_SECRET"
+    redirectURI: "https://device-auth"

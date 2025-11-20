@@ -1,6 +1,7 @@
 package server
 
 import (
+	"os"
 	"strings"
 
 	"dev.azure.com/daimler-mic/content-aggregator/service/props"
@@ -10,42 +11,31 @@ import (
 
 func NewZapLogger(cfg *props.LoggingConfig, serviceName string) (*zap.Logger, error) {
 
-	level := zap.InfoLevel
-	switch strings.ToLower(cfg.Level) {
-	case "debug":
-		level = zap.DebugLevel
-	case "warn":
-		level = zap.WarnLevel
-	case "error":
-		level = zap.ErrorLevel
+	// 1. Select encoder
+	var encoder zapcore.Encoder
+
+	encoding := strings.ToLower(cfg.Format)
+	if encoding == "json" || encoding == "" {
+		encoder = zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig())
+	} else {
+		encoder = zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
 	}
 
-	zapCfg := zap.Config{
-		Encoding:         "json",
-		Level:            zap.NewAtomicLevelAt(level),
-		OutputPaths:      []string{"stdout"},
-		ErrorOutputPaths: []string{"stderr"},
-		EncoderConfig: zapcore.EncoderConfig{
-			TimeKey:        "ts",
-			LevelKey:       "level",
-			MessageKey:     "msg",
-			NameKey:        "logger",
-			CallerKey:      "caller",
-			StacktraceKey:  "stack",
-			EncodeTime:     zapcore.ISO8601TimeEncoder,
-			EncodeLevel:    zapcore.LowercaseLevelEncoder,
-			EncodeDuration: zapcore.MillisDurationEncoder,
-		},
+	// 2. Parse log level
+	var level zapcore.Level
+	if err := level.UnmarshalText([]byte(cfg.Level)); err != nil {
+		level = zapcore.InfoLevel
 	}
 
-	logger, err := zapCfg.Build()
-	if err != nil {
-		return nil, err
-	}
+	core := zapcore.NewCore(
+		encoder,
+		zapcore.AddSync(zapcore.Lock(os.Stdout)),
+		level,
+	)
 
-	// global service field
-	logger = logger.With(
-		zap.String("service", serviceName),
+	logger := zap.New(core,
+		zap.AddCaller(),
+		zap.Fields(zap.String("service", serviceName)),
 	)
 
 	return logger, nil

@@ -2,82 +2,77 @@ package youtube
 
 import (
 	"context"
-	"fmt"
-	"net/http"
 
+	stdErr "errors"
+
+	"dev.azure.com/daimler-mic/content-aggregator/service/errors"
 	"dev.azure.com/daimler-mic/content-aggregator/service/models"
 	"dev.azure.com/daimler-mic/content-aggregator/service/props"
+	"dev.azure.com/daimler-mic/content-aggregator/service/providers"
+	yxadapters "dev.azure.com/daimler-mic/content-aggregator/service/providers/youtube/adapters"
+	yxfeatures "dev.azure.com/daimler-mic/content-aggregator/service/providers/youtube/features"
 	"go.uber.org/zap"
-	"google.golang.org/api/googleapi/transport"
-	"google.golang.org/api/youtube/v3"
 )
 
-type YouTubeStrategy struct {
-	props  props.YoutubeConfig
+const query = "trending"
+
+type YouTubeProvider struct {
+	cfg    props.YouTubeConfig
 	logger *zap.Logger
+	responseStore map[string]interface{}
+	adapters map[string]FeatureAdapter
+	features map[string]providers.FeatureStrategy    
 }
 
-func NewYouTubeStrategy(props props.YoutubeConfig, logger *zap.Logger) *YouTubeStrategy {
-	return &YouTubeStrategy{
-		props:  props,
+type FeatureAdapter func(ctx context.Context, req *models.ProviderRequest) ([]*models.ContentItem, errors.AppError)
+
+
+func (yt *YouTubeProvider) FetchFeature(ctx context.Context, req *models.ProviderRequest, feature string,) ([]*models.ContentItem, errors.AppError) {
+    adapter, ok := yt.adapters[feature]
+    if !ok {
+        return nil, errors.BadRequest(stdErr.New("Feature Unsupported"))
+    }
+
+    raw, err := adapter(ctx, req)
+    if err != nil {
+        return nil, err
+    }
+
+    feat, ok := yt.features[feature]
+    if !ok {
+        return nil, err
+    }
+
+    return feat.Apply(ctx, raw)
+}
+
+func (yt *YouTubeProvider) GetFeature(feature string) providers.FeatureStrategy {
+    return yt.features[feature]
+}
+
+func NewYouTubeProvider(cfg props.YouTubeConfig, logger *zap.Logger) *YouTubeProvider {
+	p:= &YouTubeProvider{
+		cfg:    cfg,
 		logger: logger.With(zap.String("provider", "youtube")),
+		responseStore: make(map[string]interface{}),
+		adapters: make(map[string]FeatureAdapter),
+		features: make(map[string]providers.FeatureStrategy),
 	}
+     p.registerAdapters()
+	   p.registerFeatures()
+
+		 return p
 }
 
-func (y *YouTubeStrategy) FetchContent(ctx context.Context, req models.ProviderRequest) (map[string][]models.ContentItem, error) {
-	client := &http.Client{
-		Transport: &transport.APIKey{Key: y.props.ApiKey},
-	}
 
-	// Create YouTube service instance
-	svc, err := youtube.New(client)
-	if err != nil {
-		y.logger.Error("failed to create YouTube service", zap.Error(err))
-		return nil, fmt.Errorf("youtube service init error: %w", err)
-	}
+func (yt *YouTubeProvider) registerAdapters() {
+	yt.adapters["trending"] = yxadapters.CallTrendingAPI(yt.cfg, yt.logger)
+	// yt.adapters["continue_watching"] = yxadapters.CallContinueWatchingAPI(yt.cfg, yt.logger)
+	// yt.adapters["mylist"] = yxadapters.CallMyListAPI(yt.cfg, yt.logger)
+}
 
-	// Query parameters from ProviderRequest (example: search query)
-	query := y.props.SearchQuery
-	if query == "" {
-		query = "trending"
-	}
-
-	// Call YouTube Search API
-	searchCall := svc.Search.List([]string{"id", "snippet"}).
-		Q(query).
-		MaxResults(10)
-
-	resp, err := searchCall.Context(ctx).Do()
-	if err != nil {
-		y.logger.Error("youtube search failed", zap.Error(err))
-		return nil, fmt.Errorf("youtube api error: %w", err)
-	}
-
-	// Prepare clean output
-	output := make([]map[string]any, 0)
-
-	for _, item := range resp.Items {
-		if item.Id.Kind != "youtube#video" {
-			continue
-		}
-
-		videoData := map[string]any{
-			"videoId":     item.Id.VideoId,
-			"title":       item.Snippet.Title,
-			"description": item.Snippet.Description,
-			"channel":     item.Snippet.ChannelTitle,
-			"publishedAt": item.Snippet.PublishedAt,
-			"thumbnails":  item.Snippet.Thumbnails.Default.Url,
-		}
-
-		output = append(output, videoData)
-	}
-
-	rawResp := map[string]any{
-		"provider": "youtube",
-		"results":  output,
-	}
-
-	return MapYouTubeResponse(rawResp)
-
+func (yt *YouTubeProvider) registerFeatures() {
+	yt.features["trending"] = yxfeatures.NewYouTubeTrendingFeature(yt.cfg, yt.logger)
+	// yt.features["continue_watching"] = yxfeatures.NewYouTubeContinueFeature()
+	// yt.features["mylist"] = yxfeatures.NewYouTubeMyListFeature()
 }

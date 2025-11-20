@@ -1,0 +1,348 @@
+openapi: 3.0.3
+info:
+  title: Content Aggregator API
+  version: "1.0.0"
+  description: |
+    Content Aggregator Service - aggregates content from multiple providers (YouTube, Twitch, OTT).
+    Schemas are derived from project Go models. Error format uses AppError.
+servers:
+  - url: https://cux.example.com
+    description: Production
+  - url: https://cux.nonprod.example.com
+    description: Non-Prod
+  - url: https://cux.dev.example.com
+    description: Development
+
+paths:
+  /content/aggregate:
+    post:
+      summary: Aggregate content from multiple providers
+      operationId: aggregateContent
+      requestBody:
+        description: List of provider requests to aggregate content
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AggregateRequest'
+            examples:
+              multipleProviders:
+                summary: Example request for YouTube and Twitch
+                value:
+                  providers:
+                    - provider: "youtube"
+                      apiKey: "YOUTUBE_API_KEY"
+                      functionality:
+                        - "trending"
+                        - "continue_watching"
+                    - provider: "twitch"
+                      apiKey: "TWITCH_CLIENT_ID"
+                      functionality:
+                        - "trending"
+      responses:
+        '200':
+          description: Aggregated response with provider data and optional per-feature errors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AggregateResponse'
+              examples:
+                partialSuccess:
+                  summary: YouTube success, Twitch provider error
+                  value:
+                    providers:
+                      youtube:
+                        data:
+                          trending:
+                            - id: "jG3Xq_vedDo"
+                              provider: "youtube"
+                              contentType: "video"
+                              title: "Alohomora - The True Emperor (Lyrical)"
+                              description: "Sample YouTube description"
+                              publishedAt:
+                                timestamp: "2025-11-16T06:33:11Z"
+                                relative: "2 days ago"
+                              thumbnailUrl: "https://i.ytimg.com/vi/jG3Xq_vedDo/hqdefault.jpg"
+                              contentUrl: "https://youtube.com/watch?v=jG3Xq_vedDo"
+                              viewCount:
+                                value: 3434667
+                                display: "3.4M"
+                              channelId: "UCKFnbjBQDzzh002TMJcyuZA"
+                              channelTitle: "Saregama Kannada"
+                              extras:
+                                durationSeconds:
+                                  seconds: 193
+                                  display: "3:13"
+                                tags:
+                                  - "Kannada"
+                        featureErrors: {}
+                      twitch:
+                        data: {}
+                        featureErrors:
+                          trending:
+                            statusCode: 502
+                            code: "PROVIDER_FAILURE"
+                            message: "twitch provider failed"
+        '400':
+          description: Bad request (client input error)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppError'
+              examples:
+                badFeature:
+                  summary: Unsupported feature in request
+                  value:
+                    statusCode: 400
+                    code: "BAD_REQUEST"
+                    message: "unsupported feature: trendin"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppError'
+              examples:
+                internal:
+                  value:
+                    statusCode: 500
+                    code: "INTERNAL_ERROR"
+                    message: "unexpected empty response"
+      
+        '502':
+          description: Provider failure (YouTube/Twitch/OTT issue)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppError'
+              examples:
+                providerFailure:
+                  summary: Provider returned error
+                  value:
+                    statusCode: 502
+                    code: "PROVIDER_FAILURE"
+                    message: "twitch provider failed"
+
+components:
+  schemas:
+
+    # Request schemas
+    AggregateRequest:
+      type: object
+      required:
+        - providers
+      properties:
+        providers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderRequest'
+      example:
+        providers:
+          - provider: "youtube"
+            apiKey: "YOUTUBE_API_KEY"
+            functionality:
+              - "trending"
+              - "continue_watching"
+
+    ProviderRequest:
+      type: object
+      required:
+        - provider
+      properties:
+        provider:
+          type: string
+          description: provider name (youtube, twitch, hotstar, ...)
+        apiKey:
+          type: string
+          description: provider API key or client id
+        functionality:
+          type: array
+          items:
+            type: string
+          description: list of features to request from the provider (trending, mylist, continue_watching, ...)
+      example:
+        provider: "youtube"
+        apiKey: "YOUTUBE_API_KEY"
+        functionality:
+          - "trending"
+          - "continue_watching"
+
+    # Response schemas
+    AggregateResponse:
+      type: object
+      properties:
+        providers:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ProviderResponse'
+      example:
+        providers:
+          youtube:
+            data:
+              trending:
+                - id: "jG3Xq_vedDo"
+                  provider: "youtube"
+                  contentType: "video"
+                  title: "Alohomora - The True Emperor (Lyrical)"
+                  description: "Sample YouTube description"
+                  publishedAt:
+                    timestamp: "2025-11-16T06:33:11Z"
+                    relative: "2 days ago"
+                  thumbnailUrl: "https://i.ytimg.com/vi/jG3Xq_vedDo/hqdefault.jpg"
+                  contentUrl: "https://youtube.com/watch?v=jG3Xq_vedDo"
+                  viewCount:
+                    value: 3434667
+                    display: "3.4M"
+                  channelId: "UCKFnbjBQDzzh002TMJcyuZA"
+                  channelTitle: "Saregama Kannada"
+                  extras:
+                    durationSeconds:
+                      seconds: 193
+                      display: "3:13"
+                      tags:
+                        - "Kannada"
+            featureErrors: {}
+
+    ProviderResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: '#/components/schemas/ContentItem'
+        featureErrors:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/AppError'
+      example:
+        data:
+          trending: []
+        featureErrors: {}
+
+    ContentItem:
+      type: object
+      properties:
+        id:
+          type: string
+        provider:
+          type: string
+        contentType:
+          type: string
+          enum:
+            - video
+            - short
+            - clip
+            - live
+            - upcoming
+            - vod
+            - highlight
+            - movie
+            - episode
+            - season
+            - trailer
+            - promo
+            - playlist
+            - channel
+            - category
+        title:
+          type: string
+        description:
+          type: string
+        publishedAt:
+          $ref: '#/components/schemas/PublishedAt'
+        thumbnailUrl:
+          type: string
+        contentUrl:
+          type: string
+        viewCount:
+          $ref: '#/components/schemas/ViewCount'
+        channelId:
+          type: string
+        channelTitle:
+          type: string
+        extras:
+          type: object
+          additionalProperties: true
+      required:
+        - id
+        - provider
+        - contentType
+      example:
+        id: "jG3Xq_vedDo"
+        provider: "youtube"
+        contentType: "video"
+        title: "Alohomora - The True Emperor (Lyrical)"
+        description: "Sample YouTube description"
+        publishedAt:
+          timestamp: "2025-11-16T06:33:11Z"
+          relative: "2 days ago"
+        thumbnailUrl: "https://i.ytimg.com/vi/jG3Xq_vedDo/hqdefault.jpg"
+        contentUrl: "https://youtube.com/watch?v=jG3Xq_vedDo"
+        viewCount:
+          value: 3434667
+          display: "3.4M"
+        channelId: "UCKFnbjBQDzzh002TMJcyuZA"
+        channelTitle: "Saregama Kannada"
+        extras:
+          durationSeconds:
+            seconds: 193
+            display: "3:13"
+          tags:
+            - "Kannada"
+
+    ViewCount:
+      type: object
+      properties:
+        value:
+          type: integer
+          format: int64
+        display:
+          type: string
+      example:
+        value: 3434667
+        display: "3.4M"
+
+    PublishedAt:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        relative:
+          type: string
+      example:
+        timestamp: "2025-11-16T06:33:11Z"
+        relative: "2 days ago"
+
+    Duration:
+      type: object
+      properties:
+        seconds:
+          type: integer
+          format: int64
+        display:
+          type: string
+      example:
+        seconds: 193
+        display: "3:13"
+
+    # AppError schema
+    AppError:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+        code:
+          type: string
+        message:
+          type: string
+      required:
+        - statusCode
+        - code
+        - message
+      example:
+        statusCode: 502
+        code: "PROVIDER_FAILURE"
+        message: "twitch provider failed"
