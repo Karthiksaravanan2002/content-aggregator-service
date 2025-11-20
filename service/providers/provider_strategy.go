@@ -8,5 +8,6 @@ import (
 
 // ProviderStrategy defines a provider (YouTube, Twitch, etc.)
 type ProviderStrategy interface {
-	FetchContent(ctx context.Context, req models.ProviderRequest) (map[string][]models.ContentItem, error)
+	FetchFeatureRaw(ctx context.Context, req models.ProviderRequest, feature string) (map[string][]models.ContentItem, error)
 }
+

@@ -6,18 +6,11 @@ import (
 	"dev.azure.com/daimler-mic/content-aggregator/service/models"
 )
 
-// MyListFeature is a placeholder for a user's saved content list.
 type MyListFeature struct{}
 
-func NewMyListFeature() *MyListFeature {
-	return &MyListFeature{}
-}
+func NewMyListFeature() *MyListFeature { return &MyListFeature{} }
+func (MyListFeature) Name() string     { return "mylist" }
 
-func (f *MyListFeature) Name() string {
-	return "mylist"
-}
-
-func (f *MyListFeature) Execute(ctx context.Context, items []models.ContentItem, req models.ProviderRequest) []models.ContentItem {
-
-	return items
+func (MyListFeature) Apply(ctx context.Context, raw map[string][]models.ContentItem) ([]models.ContentItem, error) {
+	return []models.ContentItem{}, nil
 }

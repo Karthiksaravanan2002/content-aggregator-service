@@ -26,4 +26,5 @@ type ContentItem struct {
 	Thumbnail   map[string]string `json:"thumbnail,omitempty"`
 	ViewCount   int64             `json:"viewCount,omitempty"`
 	Extra       map[string]string `json:"extra,omitempty"`
+	Raw       map[string]interface{} `json:"raw,omitempty"`
 }

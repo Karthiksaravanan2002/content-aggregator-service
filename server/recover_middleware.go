@@ -5,27 +5,37 @@ import (
 	"runtime/debug"
 
 	"go.uber.org/zap"
+
+	"dev.azure.com/daimler-mic/content-aggregator/service/errors"
 )
 
 func RecoverMiddleware(logger *zap.Logger) Middleware {
-	return func(next http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
 
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-			defer func() {
-				if rec := recover(); rec != nil {
-					logger.Error("panic recovered",
-						zap.Any("error", rec),
-						zap.String("path", r.URL.Path),
-						zap.ByteString("stack", debug.Stack()),
-					)
+            defer func() {
+                if rec := recover(); rec != nil {
 
-					w.WriteHeader(http.StatusInternalServerError)
-					_, _ = w.Write([]byte(`{"error":"internal server error"}`))
-				}
-			}()
+                    logger.Error("panic recovered",
+                        zap.Any("error", rec),
+                        zap.String("path", r.URL.Path),
+                        zap.ByteString("stack", debug.Stack()),
+                    )
 
-			next.ServeHTTP(w, r)
-		})
-	}
+                    appErr := errors.NewInternalError(
+                        "internal server error",
+                        map[string]interface{}{
+                            "path": r.URL.Path,
+                        },
+                    )
+
+                    errors.WriteError(w, appErr)
+                }
+            }()
+
+            next.ServeHTTP(w, r)
+        })
+    }
 }
+

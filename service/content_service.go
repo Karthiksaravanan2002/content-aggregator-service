@@ -2,99 +2,77 @@ package service
 
 import (
 	"context"
-	"errors"
 	"time"
 
+	"dev.azure.com/daimler-mic/content-aggregator/service/errors"
 	"dev.azure.com/daimler-mic/content-aggregator/service/models"
 	"go.uber.org/zap"
 )
 
-// ContentService aggregates provider content & applies features.
 type ContentService struct {
-	factory  *ProviderFactory
-	logger   *zap.Logger
-	timeout  time.Duration
-	cacheTTL time.Duration
+	factory *ProviderFactory
+	logger  *zap.Logger
 }
 
-func (s *ContentService) HandleRequest(ctx context.Context, req models.AggregateRequest) (map[string]interface{}, error) {
-
-	if len(req.Providers) == 0 {
-		return nil, errors.New("no providers supplied")
+func NewContentService(factory *ProviderFactory, logger *zap.Logger, timeout time.Duration) *ContentService {
+	return &ContentService{
+		factory: factory,
+		logger:  logger.With(zap.String("component", "content-service")),
 	}
+}
 
-	s.logger.Info("content aggregation started",
-		zap.Int("providers", len(req.Providers)),
-	)
-
-	response := make(map[string]interface{})
+func (s *ContentService) HandleRequest(ctx context.Context, req models.AggregateRequest) (*models.AggregateResponse, error) {
+	
+	
+	result := &models.AggregateResponse{
+		Providers: make(map[string]models.ProviderResponse),
+	}
 
 	for _, p := range req.Providers {
+
 		provider := s.factory.GetProvider(p.Provider)
+		
 		if provider == nil {
-			response[p.Provider] = map[string]string{
-				"error": "unsupported provider",
+			result.Providers[p.Provider] = models.ProviderResponse{ 
+				FeatureErrors: map[string]*errors.AppError{"_provider": errors.NewBadRequest("unsupported provider: "+p.Provider,map[string]interface{}{"provider": p.Provider},
+			   ),
+				},
 			}
 			continue
 		}
 
-		// Timeout per provider call
-		pctx, cancel := context.WithTimeout(ctx, s.timeout)
-		defer cancel()
+		featureData := make(map[string][]models.ContentItem)
+		featureErrs := make(map[string]*errors.AppError)
 
-		rawData, err := provider.FetchContent(pctx, p)
-		if err != nil {
-			s.logger.Error("provider fetch failed", zap.String("provider", p.Provider), zap.Error(err))
-			response[p.Provider] = map[string]string{
-				"error": err.Error(),
-			}
-			continue
-		}
+		for _, featName := range p.Functionality {
 
-		// rawData is map[string][]ContentItem
-		featureOutput := make(map[string][]models.ContentItem)
-
-		for _, featureName := range p.Functionality {
-
-			feature, ok := FeatureRegistry[featureName]
-			if !ok {
-				featureOutput[featureName] = []models.ContentItem{
-					//{ID: "error", Raw: map[string]interface{}{"error": "unsupported feature"}},
-				}
+			feat := FeatureRegistry[featName]
+			if feat == nil {
+				featureErrs[featName] = errors.NewBadRequest("unsupported feature: "+featName,map[string]interface{}{"feature": featName},)
 				continue
 			}
 
-			// If provider didn't provide that feature key, skip or err
-			items, ok := rawData[featureName]
-			if !ok {
-				featureOutput[featureName] = []models.ContentItem{
-					//{ID: "error", Raw: map[string]interface{}{"error": "provider did not return feature"}},
-				}
+			raw, err := provider.FetchFeatureRaw(ctx, p, featName)
+
+			
+			if err != nil {
+				featureErrs[featName] = errors.NewProviderError(p.Provider,"Failed to fetch provider",map[string]interface{}{"feature": featName, "error": err.Error()},)
 				continue
 			}
 
-			// Apply feature transformation
-			out := feature.Execute(ctx, items, p)
-			featureOutput[featureName] = out
+			items, ferr := feat.Apply(ctx, raw)
+				if ferr != nil {featureErrs[featName] = errors.NewFeatureError(featName,"feature execution failed",map[string]interface{}{"error": ferr.Error()},)
+				continue
+			}
+
+		featureData[featName] = items
 		}
 
-		response[p.Provider] = featureOutput
+		result.Providers[p.Provider] = models.ProviderResponse{
+			Data:  featureData,
+			FeatureErrors: featureErrs,
+		}
 	}
 
-	return response, nil
-}
-
-func NewContentService(
-	factory *ProviderFactory,
-	logger *zap.Logger,
-	timeout time.Duration,
-	cacheTTL time.Duration,
-) *ContentService {
-
-	return &ContentService{
-		factory:  factory,
-		logger:   logger,
-		timeout:  timeout,
-		cacheTTL: cacheTTL,
-	}
+	return result, nil
 }

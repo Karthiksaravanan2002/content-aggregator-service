@@ -8,8 +8,10 @@ import (
 )
 
 // FeatureRegistry maps feature names to strategy implementations.
+
 var FeatureRegistry = map[string]features.FeatureStrategy{
 	"trending":          trending.NewTrendingFeature(),
-	"mylist":            mylist.NewMyListFeature(),
 	"continue_watching": continuewatching.NewContinueWatchingFeature(),
+	"mylist":            mylist.NewMyListFeature(),
 }
+

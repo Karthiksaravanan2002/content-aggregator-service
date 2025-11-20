@@ -49,7 +49,7 @@ func (s *Server) Start() error {
 func (s *Server) Shutdown() {
 	s.logger.Info("server shutting down...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := s.srv.Shutdown(ctx); err != nil {

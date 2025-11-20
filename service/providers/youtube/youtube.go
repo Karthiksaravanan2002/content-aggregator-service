@@ -2,45 +2,58 @@ package youtube
 
 import (
 	"context"
-	"fmt"
-	"net/http"
+	"errors"
 
 	"dev.azure.com/daimler-mic/content-aggregator/service/models"
 	"dev.azure.com/daimler-mic/content-aggregator/service/props"
 	"go.uber.org/zap"
-	"google.golang.org/api/googleapi/transport"
-	"google.golang.org/api/youtube/v3"
+	"google.golang.org/api/option"
+	youtube "google.golang.org/api/youtube/v3"
 )
 
-type YouTubeStrategy struct {
-	props  props.YoutubeConfig
+const query = "trending"
+
+type YouTubeProvider struct {
+	cfg    props.YouTubeConfig
 	logger *zap.Logger
+	responseStore map[string]interface{}
 }
 
-func NewYouTubeStrategy(props props.YoutubeConfig, logger *zap.Logger) *YouTubeStrategy {
-	return &YouTubeStrategy{
-		props:  props,
+func NewYouTubeProvider(cfg props.YouTubeConfig, logger *zap.Logger) *YouTubeProvider {
+	return &YouTubeProvider{
+		cfg:    cfg,
 		logger: logger.With(zap.String("provider", "youtube")),
+		responseStore: make(map[string]interface{}),
 	}
 }
 
-func (y *YouTubeStrategy) FetchContent(ctx context.Context, req models.ProviderRequest) (map[string][]models.ContentItem, error) {
-	client := &http.Client{
-		Transport: &transport.APIKey{Key: y.props.ApiKey},
+func (yt *YouTubeProvider) FetchFeatureRaw(ctx context.Context, req models.ProviderRequest, feature string,) (map[string][]models.ContentItem, error) {
+	switch feature {
+	case "trending":
+		return yt.callTrendingAPI(ctx, req)
+
+	case "continue_watching":
+		return yt.callContinueWatchingAPI(ctx, req)
+
+	case "mylist":
+		return yt.callMyListAPI(ctx, req)
+
+	default:
+		return nil, errors.New("feature not supported by youtube")
 	}
+}
+
+// Skeleton implementations:
+func (yt *YouTubeProvider) callTrendingAPI(ctx context.Context, req models.ProviderRequest) (map[string][]models.ContentItem, error) {
+
 
 	// Create YouTube service instance
-	svc, err := youtube.New(client)
+	svc, err := youtube.NewService(ctx, option.WithAPIKey(yt.cfg.ApiKey))
 	if err != nil {
-		y.logger.Error("failed to create YouTube service", zap.Error(err))
-		return nil, fmt.Errorf("youtube service init error: %w", err)
+		yt.logger.Error("failed to create YouTube service", zap.Error(err))
+		return nil, err
 	}
 
-	// Query parameters from ProviderRequest (example: search query)
-	query := y.props.SearchQuery
-	if query == "" {
-		query = "trending"
-	}
 
 	// Call YouTube Search API
 	searchCall := svc.Search.List([]string{"id", "snippet"}).
@@ -49,8 +62,8 @@ func (y *YouTubeStrategy) FetchContent(ctx context.Context, req models.ProviderR
 
 	resp, err := searchCall.Context(ctx).Do()
 	if err != nil {
-		y.logger.Error("youtube search failed", zap.Error(err))
-		return nil, fmt.Errorf("youtube api error: %w", err)
+		yt.logger.Error("youtube search failed", zap.Error(err))
+		return nil, err
 	}
 
 	// Prepare clean output
@@ -77,7 +90,13 @@ func (y *YouTubeStrategy) FetchContent(ctx context.Context, req models.ProviderR
 		"provider": "youtube",
 		"results":  output,
 	}
-
 	return MapYouTubeResponse(rawResp)
+}
 
+func (yt *YouTubeProvider) callContinueWatchingAPI(ctx context.Context, req models.ProviderRequest) (map[string][]models.ContentItem, error) {
+	return map[string][]models.ContentItem{}, nil
+}
+
+func (yt *YouTubeProvider) callMyListAPI(ctx context.Context, req models.ProviderRequest) (map[string][]models.ContentItem, error) {
+	return map[string][]models.ContentItem{}, nil
 }
