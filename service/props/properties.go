@@ -20,9 +20,9 @@ type LoggingConfig struct {
 }
 
 type CacheConfig struct {
-    TTLSeconds  int    `yaml:"TTLSeconds"`   
-    RedisHost   string `yaml:"RedisHost"`   
-    RedisPort   string `yaml:"RedisPort"`  
+	TTLSeconds int    `yaml:"TTLSeconds"`
+	RedisHost  string `yaml:"RedisHost"`
+	RedisPort  string `yaml:"RedisPort"`
 }
 
 type ProvidersConfig struct {
@@ -30,6 +30,14 @@ type ProvidersConfig struct {
 	Twitch  TwitchConfig
 }
 
-type YoutubeConfig struct{}
+type YoutubeConfig struct {
+	Provider    string `json:"provider"` // "youtube", "twitch", etc.
+	ApiKey      string
+	SearchQuery string `json:"searchQuery"`
+	ChannelID   string `json:"channelId,omitempty"`
+	MaxResults  int    `json:"maxResults,omitempty"`
+	Features    []string
+	UserID      string
+}
 
 type TwitchConfig struct{}
