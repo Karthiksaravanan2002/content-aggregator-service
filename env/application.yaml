@@ -1,0 +1,12 @@
+Server:
+  Address: ":8080"
+  ContextRoot: "/"
+  Timeout: 30   # context timeout in seconds
+
+Logging:
+  Level: "info"
+  Format: "json"
+  BodyLogging: "errors"
+
+Cache:
+  TTLSeconds: 300
