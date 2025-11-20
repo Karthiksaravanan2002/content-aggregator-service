@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"dev.azure.com/daimler-mic/content-aggregator/service"
+	"dev.azure.com/daimler-mic/content-aggregator/service/errors"
 	"dev.azure.com/daimler-mic/content-aggregator/service/models"
 	"dev.azure.com/daimler-mic/content-aggregator/service/props"
 	"go.uber.org/zap"
@@ -65,11 +66,8 @@ func (h *ContentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Execute content aggregation
 	resp, err := h.contentService.HandleRequest(ctx, aggReq)
 	if err != nil {
-		h.logger.Error("service error",
-			zap.String("path", r.URL.Path),
-			zap.Error(err),
-		)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		h.logger.Error("service error",zap.String("path", r.URL.Path),zap.Error(err))
+		errors.WriteError(w,h.logger, err)
 		return
 	}
 
