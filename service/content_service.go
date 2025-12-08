@@ -11,19 +11,16 @@ import (
 	"go.uber.org/zap"
 )
 
-type ContentService struct {
-	factory *ProviderFactory
+type ContentService interface{
+	Aggregate(ctx context.Context,req *models.AggregateRequest) (*models.AggregateResponse)
+}
+
+type contentService struct {
+	factory ProviderFactory
 	logger  *zap.Logger
-}
+} 
 
-func NewContentService(factory *ProviderFactory, logger *zap.Logger, timeout time.Duration) *ContentService {
-	return &ContentService{
-		factory: factory,
-		logger:  logger.With(zap.String("component", "content-service")),
-	}
-}
-
-func (s *ContentService) Aggregate(ctx context.Context,req *models.AggregateRequest) (*models.AggregateResponse) {
+func (s *contentService) Aggregate(ctx context.Context,req *models.AggregateRequest) (*models.AggregateResponse) {
 
 	result := &models.AggregateResponse{Providers: make(map[string]*models.ProviderResponse)}
 
@@ -37,11 +34,17 @@ func (s *ContentService) Aggregate(ctx context.Context,req *models.AggregateRequ
         }
 		if provider == nil {
 			s.logger.Warn("unsupported provider", zap.String("provider", p.Provider))
+			
 
-            pResp.FeatureErrors["_provider"] = errors.BadGateway(stdErr.New("Provider not supported"))
+            pResp.FeatureErrors["Default"] = errors.BadRequest(stdErr.New("Provider not supported"))
 						result.Providers[p.Provider] = pResp
 
 			continue
+		}
+
+		if p.Functionality == nil{
+			      pResp.FeatureErrors["Default"] = errors.BadRequest(stdErr.New("No Features Present"))
+						result.Providers[p.Provider] = pResp
 		}
 
 		for _, featureName := range p.Functionality {
@@ -58,4 +61,12 @@ func (s *ContentService) Aggregate(ctx context.Context,req *models.AggregateRequ
 	}
 
 	return result
+}
+
+
+func NewContentService(factory ProviderFactory, logger *zap.Logger, timeout time.Duration) ContentService {
+	return &contentService{
+		factory: factory,
+		logger:  logger.With(zap.String("component", "content-service")),
+	}
 }

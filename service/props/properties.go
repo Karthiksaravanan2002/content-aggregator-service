@@ -10,7 +10,7 @@ type Config struct {
 type ServerConfig struct {
 	Address     string `yaml:"address" json:"Address"`
 	ContextRoot string `yaml:"contextRoot" json:"ContextRoot"`
-	Timeout     int    `yaml:"timeout" json:"Timeout"` 
+	Timeout     int    `yaml:"timeout" json:"Timeout"`
 }
 
 type LoggingConfig struct {
@@ -31,11 +31,11 @@ type ProvidersConfig struct {
 }
 
 type YouTubeConfig struct {
-	Provider    string `json:"provider"` // "youtube"
-	Enabled     bool
-	client 			Api
-	ApiKey      string
-	Features    YouTubeFeatures `json:"features"`
+	Provider string `json:"provider"` // "youtube"
+	Enabled  bool
+	client   Api
+	ApiKey   string
+	Features YouTubeFeatures `json:"features"`
 }
 type YouTubeFeatures struct {
 	Trending         *TrendingConfig         `json:"trending,omitempty"`
@@ -44,18 +44,20 @@ type YouTubeFeatures struct {
 }
 
 type TrendingConfig struct {
-	MaxResults int `json:"maxResults,omitempty"`
+	MaxResults int    `json:"maxResults,omitempty"`
 	Region     string `json:"region,omitempty"`
 }
 
 type ContinueWatchingConfig struct {
 	MaxResults int `json:"maxResults,omitempty"`
 }
+
 type TwitchConfig struct {
-	Provider    string `json:"provider"` // "youtube"
-	Enabled     bool
-	client 			Api
-	ApiKey      string
+	Provider     string `json:"provider"` // "twitch"
+	Enabled      bool
+	Client ClientProps  `json:"client"`
+	ClientID     string `json:"clientId"`     // Twitch Client-ID
+	ClientSecret string `json:"clientSecret"` // Twitch Client-Secret
 }
 
 // Api holds api configuration for any service
@@ -65,7 +67,7 @@ type Api struct {
 	BasePath   string               `yaml:"base-path" envconfig:"BASE_PATH"`
 	Scheme     string               `yaml:"scheme" envconfig:"SCHEME"`
 	Operations map[string]Operation `yaml:"operations"`
-	Client     ClientProps    `yaml:"client" envconfig:"CLIENT"`
+	Client     ClientProps          `yaml:"client" envconfig:"CLIENT"`
 }
 
 // Operation represents various end-point/resources of a client API

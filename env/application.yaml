@@ -18,6 +18,6 @@ providers:
   youtube:
     apiKey: "AIzaSyCAJzTJgPJzXYKCum6DOiBzzmfsNXsPIyg"
   twitch:
-    clientID: "TWITCH_CLIENT_ID"
-    clientSecret: "TWITCH_CLIENT_SECRET"
+    clientID: "en8xn2aotya1v2g84nwxezhjxi1wnm"
+    clientSecret: "euj6fzxi5tk9t8707fkv2t2agrhhbu"
     redirectURI: "https://device-auth"

@@ -35,7 +35,7 @@ func PickBetter(current AppError, newErr AppError) AppError {
 		return newErr
 	}
 
-	if ErrorPriority(newErr.StatusCode()) < ErrorPriority(newErr.StatusCode()) {
+	if ErrorPriority(newErr.StatusCode()) < ErrorPriority(current.StatusCode()) {
 		return newErr
 	}
 	return current

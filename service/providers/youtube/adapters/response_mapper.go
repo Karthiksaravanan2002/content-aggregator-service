@@ -24,18 +24,18 @@ func MapYouTubeResponse(v *youtube.Video) *models.ContentItem {
 	}
 
 	return &models.ContentItem{
-		ID:           v.Id,
-		Provider:     "youtube",
-		ContentType:  models.ContentTypeVideo,
-		Title:        helper.DefaultString(sn.Title, ""),
-		Description:  helper.DefaultString(sn.Description, ""),
-		PublishedAt:  models.PublishedAt{
+		ID:          v.Id,
+		Provider:    "youtube",
+		ContentType: models.ContentTypeVideo,
+		Title:       helper.DefaultString(sn.Title, ""),
+		Description: helper.DefaultString(sn.Description, ""),
+		PublishedAt: models.PublishedAt{
 			Timestamp: *publishedAtPtr,
 		},
 		ThumbnailURL: helper.ExtractBestThumbnailFromYT(sn.Thumbnails),
 		ContentURL:   helper.MakeVideoURL(v.Id),
 
-		ViewCount:       models.ViewCount{
+		ViewCount: models.ViewCount{
 			Value: helper.ToInt64(st.ViewCount),
 		},
 
@@ -49,12 +49,4 @@ func MapYouTubeResponse(v *youtube.Video) *models.ContentItem {
 			},
 		},
 	}
-}
-
-// Helper function to safely get string values
-func getString(m map[string]any, key string) string {
-	if val, ok := m[key].(string); ok {
-		return val
-	}
-	return ""
 }
