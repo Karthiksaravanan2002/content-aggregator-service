@@ -2,38 +2,69 @@ package twitch
 
 import (
 	"context"
+	stdErr "errors"
 
+	"dev.azure.com/daimler-mic/content-aggregator/service/errors"
 	"dev.azure.com/daimler-mic/content-aggregator/service/models"
 	"dev.azure.com/daimler-mic/content-aggregator/service/props"
 	"dev.azure.com/daimler-mic/content-aggregator/service/providers"
+	txadapters "dev.azure.com/daimler-mic/content-aggregator/service/providers/twitch/adapters"
+	txfeatures "dev.azure.com/daimler-mic/content-aggregator/service/providers/twitch/features"
+
 	"go.uber.org/zap"
 )
 
-type TwitchProvider struct {
-	cfg    props.TwitchConfig
-	logger *zap.Logger
-	responseStore map[string]interface{}
-  features map[string]providers.FeatureStrategy
-}
+type FeatureAdapter func(ctx context.Context, req *models.ProviderRequest) ([]*models.ContentItem, errors.AppError)
 
-func (tw *TwitchProvider) GetFeature(name string) providers.FeatureStrategy {
-    return tw.features[name]
+type TwitchProvider struct {
+	cfg           props.TwitchConfig
+	logger        *zap.Logger
+	responseStore map[string]interface{}
+	adapters      map[string]FeatureAdapter
+	features      map[string]providers.FeatureStrategy
 }
 
 func NewTwitchProvider(cfg props.TwitchConfig, logger *zap.Logger) *TwitchProvider {
-	return &TwitchProvider{
-		cfg:    cfg,
-		logger: logger.With(zap.String("provider", "twitch")),
+	p := &TwitchProvider{
+		cfg:           cfg,
+		logger:        logger.With(zap.String("provider", "twitch")),
 		responseStore: make(map[string]interface{}),
+		adapters:      make(map[string]FeatureAdapter),
+		features:      make(map[string]providers.FeatureStrategy),
 	}
+
+	p.registerAdapters()
+	p.registerFeatures()
+	return p
 }
 
-func (t *TwitchProvider) FetchFeatureRaw(ctx context.Context, req models.ProviderRequest, feature string) ([]models.ContentItem, error) {
-	// Twitch has ONE endpoint → reuse for all features
-	raw, _ := t.fetchStreamsAPI(ctx, req)
-	return raw, nil
+func (tp *TwitchProvider) FetchFeature(ctx context.Context, req *models.ProviderRequest, feature string) ([]*models.ContentItem, errors.AppError) {
+	adapter, ok := tp.adapters[feature]
+	if !ok {
+		return nil, errors.BadRequest(stdErr.New("Feature Unsupported"))
+	}
+
+	raw, err := adapter(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	feat, ok := tp.features[feature]
+	if !ok {
+		return nil, err
+	}
+
+	return feat.Apply(ctx, raw)
 }
 
-func (t *TwitchProvider) fetchStreamsAPI(ctx context.Context, req models.ProviderRequest) ([]models.ContentItem, error) {
-	return []models.ContentItem{}, nil
+func (tp *TwitchProvider) GetFeature(feature string) providers.FeatureStrategy {
+	return tp.features[feature]
+}
+
+func (tp *TwitchProvider) registerAdapters() {
+	tp.adapters["trending"] = txadapters.CallTrendingStreams(tp.cfg, tp.logger)
+}
+
+func (tp *TwitchProvider) registerFeatures() {
+	tp.features["trending"] = txfeatures.NewTwitchTrendingFeature(tp.cfg, tp.logger)
 }
